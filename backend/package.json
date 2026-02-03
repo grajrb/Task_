@@ -1,0 +1,24 @@
+{
+  "name": "ai-knowledge-inbox-backend",
+  "version": "1.0.0",
+  "description": "Backend API for AI Knowledge Inbox with RAG",
+  "main": "src/server.js",
+  "type": "module",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js"
+  },
+  "keywords": ["rag", "ai", "knowledge-base", "embeddings"],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "express": "^4.18.2",
+    "cors": "^2.8.5",
+    "dotenv": "^16.3.1",
+    "openai": "^4.20.1",
+    "cheerio": "^1.0.0-rc.12",
+    "better-sqlite3": "^9.2.2",
+    "hnswlib-node": "^3.0.0",
+    "uuid": "^9.0.1"
+  }
+}
