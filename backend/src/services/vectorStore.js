@@ -1,23 +1,13 @@
-import { HierarchicalNSW } from 'hnswlib-node';
-import { fileURLToPath } from 'url';
-import { dirname, join } from 'path';
-import { existsSync, mkdirSync } from 'fs';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
-
+/**
+ * Simple in-memory vector store using cosine similarity
+ * Pure JavaScript implementation - no native dependencies required
+ */
 class VectorStore {
-  constructor(dimensions = 1536, maxElements = 10000) {
+  constructor(dimensions = 768) {
     this.dimensions = dimensions;
-    this.maxElements = maxElements;
-    this.index = new HierarchicalNSW('cosine', dimensions);
-    this.index.initIndex(maxElements);
+    this.vectors = []; // Array of { id, chunkId, embedding }
     
-    // Map embedding IDs to chunk IDs
-    this.embeddingToChunk = new Map();
-    this.nextEmbeddingId = 0;
-    
-    console.log(`[VectorStore] Initialized with ${dimensions} dimensions, max ${maxElements} elements`);
+    console.log(`[VectorStore] Initialized with ${dimensions} dimensions`);
   }
 
   addEmbedding(chunkId, embedding) {
@@ -25,15 +15,35 @@ class VectorStore {
       throw new Error(`Embedding dimension mismatch: expected ${this.dimensions}, got ${embedding.length}`);
     }
 
-    const embeddingId = this.nextEmbeddingId++;
-    this.index.addPoint(embedding, embeddingId);
-    this.embeddingToChunk.set(embeddingId, chunkId);
+    const embeddingId = this.vectors.length;
+    this.vectors.push({
+      id: embeddingId,
+      chunkId,
+      embedding
+    });
     
     return embeddingId;
   }
 
+  /**
+   * Calculate cosine similarity between two vectors
+   */
+  cosineSimilarity(a, b) {
+    let dotProduct = 0;
+    let normA = 0;
+    let normB = 0;
+    
+    for (let i = 0; i < a.length; i++) {
+      dotProduct += a[i] * b[i];
+      normA += a[i] * a[i];
+      normB += b[i] * b[i];
+    }
+    
+    return dotProduct / (Math.sqrt(normA) * Math.sqrt(normB));
+  }
+
   search(queryEmbedding, k = 5) {
-    if (this.nextEmbeddingId === 0) {
+    if (this.vectors.length === 0) {
       console.log('[VectorStore] No embeddings in index');
       return [];
     }
@@ -42,52 +52,22 @@ class VectorStore {
       throw new Error(`Query embedding dimension mismatch: expected ${this.dimensions}, got ${queryEmbedding.length}`);
     }
 
-    const numNeighbors = Math.min(k, this.nextEmbeddingId);
-    const result = this.index.searchKnn(queryEmbedding, numNeighbors);
+    // Calculate similarity for all vectors
+    const similarities = this.vectors.map(vec => ({
+      chunkId: vec.chunkId,
+      similarity: this.cosineSimilarity(queryEmbedding, vec.embedding)
+    }));
     
-    // result.neighbors contains embedding IDs, result.distances contains distances
-    const results = [];
-    for (let i = 0; i < result.neighbors.length; i++) {
-      const embeddingId = result.neighbors[i];
-      const chunkId = this.embeddingToChunk.get(embeddingId);
-      const distance = result.distances[i];
-      const similarity = 1 - distance; // cosine distance to similarity
-      
-      results.push({
-        chunkId,
-        similarity,
-        distance
-      });
-    }
+    // Sort by similarity (descending) and take top k
+    similarities.sort((a, b) => b.similarity - a.similarity);
+    const results = similarities.slice(0, k);
     
     console.log(`[VectorStore] Found ${results.length} results for query`);
     return results;
   }
 
   getSize() {
-    return this.nextEmbeddingId;
-  }
-
-  // Optional: Save/load index for persistence
-  saveIndex(filepath = join(__dirname, '../../data/vector.index')) {
-    const dir = dirname(filepath);
-    if (!existsSync(dir)) {
-      mkdirSync(dir, { recursive: true });
-    }
-    
-    this.index.writeIndexSync(filepath);
-    console.log(`[VectorStore] Index saved to ${filepath}`);
-  }
-
-  loadIndex(filepath = join(__dirname, '../../data/vector.index')) {
-    if (!existsSync(filepath)) {
-      console.log('[VectorStore] No saved index found');
-      return false;
-    }
-    
-    this.index.readIndexSync(filepath);
-    console.log(`[VectorStore] Index loaded from ${filepath}`);
-    return true;
+    return this.vectors.length;
   }
 }
 

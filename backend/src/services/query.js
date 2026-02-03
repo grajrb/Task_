@@ -1,11 +1,11 @@
-import OpenAI from 'openai';
+import { GoogleGenerativeAI } from '@google/generative-ai';
 
 class QueryService {
-  constructor(sqliteStore, vectorStore, embeddingService, apiKey, model = 'gpt-4o-mini') {
+  constructor(sqliteStore, vectorStore, embeddingService, apiKey, model = 'gemini-1.5-flash') {
     this.sqliteStore = sqliteStore;
     this.vectorStore = vectorStore;
     this.embeddingService = embeddingService;
-    this.client = new OpenAI({ apiKey });
+    this.client = new GoogleGenerativeAI(apiKey);
     this.model = model;
   }
 
@@ -70,19 +70,19 @@ class QueryService {
   }
 
   /**
-   * Generate answer using OpenAI with retrieved context
+   * Generate answer using Gemini with retrieved context
    */
   async generateAnswer(question, context) {
-    const systemPrompt = `You are a helpful assistant that answers questions based on the provided context.
+    const prompt = `You are a helpful assistant that answers questions based on the provided context.
 
 Instructions:
 - Answer the question using ONLY the information from the provided context
 - If the context doesn't contain relevant information, say so clearly
 - Cite sources by referencing the [number] in the context
 - Be concise but complete
-- If you're uncertain, indicate that in your response`;
+- If you're uncertain, indicate that in your response
 
-    const userPrompt = `Context from knowledge base:
+Context from knowledge base:
 ${context}
 
 Question: ${question}
@@ -90,18 +90,19 @@ Question: ${question}
 Please provide a clear answer based on the context above.`;
 
     try {
-      const response = await this.client.chat.completions.create({
+      const model = this.client.getGenerativeModel({ 
         model: this.model,
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: userPrompt }
-        ],
-        temperature: 0.7,
-        max_tokens: 1000
+        generationConfig: {
+          temperature: 0.7,
+          maxOutputTokens: 1000,
+        }
       });
 
+      const result = await model.generateContent(prompt);
+      const response = result.response;
+
       console.log('[QueryService] Generated answer from LLM');
-      return response.choices[0].message.content;
+      return response.text();
       
     } catch (error) {
       console.error('[QueryService] Error generating answer:', error.message);
