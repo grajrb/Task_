@@ -8,7 +8,12 @@
     "start": "node src/server.js",
     "dev": "node --watch src/server.js"
   },
-  "keywords": ["rag", "ai", "knowledge-base", "embeddings"],
+  "keywords": [
+    "rag",
+    "ai",
+    "knowledge-base",
+    "embeddings"
+  ],
   "author": "",
   "license": "MIT",
   "dependencies": {
