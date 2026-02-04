@@ -25,6 +25,10 @@ class VectorStore {
     return embeddingId;
   }
 
+  hasEmbedding(chunkId) {
+    return this.vectors.some(v => v.chunkId === chunkId);
+  }
+
   /**
    * Calculate cosine similarity between two vectors
    */

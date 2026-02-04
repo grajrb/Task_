@@ -6,6 +6,12 @@ class IngestionService {
     this.sqliteStore = sqliteStore;
     this.vectorStore = vectorStore;
     this.embeddingService = embeddingService;
+    
+    // Chunking configuration - ultra-aggressive limits for memory safety
+    this.chunkSize = 50; // tokens (~200 chars)
+    this.chunkOverlap = 0; // NO overlap to reduce memory
+    this.maxChunksPerItem = 1; // SINGLE chunk only
+    this.maxContentLength = 200; // 200 chars per item (reduced from 300)
   }
 
   /**
@@ -107,12 +113,12 @@ class IngestionService {
       
       console.log(`[IngestionService] Extracted ${text.length} characters of text`);
       
-      if (!text || text.length < 50) {
+      if (!text || text.length < 20) {
         throw new Error(`Insufficient text content extracted from URL (got ${text.length} chars). Try a smaller or simpler page.`);
       }
       
-      // Limit text size aggressively for short notes
-      const maxTextSize = 500; // 500 chars max
+      // Limit text size ultra-aggressively for short notes
+      const maxTextSize = 200; // 200 chars max
       if (text.length > maxTextSize) {
         console.log(`[IngestionService] Content truncated from ${text.length} to ${maxTextSize} characters`);
         text = text.substring(0, maxTextSize);
@@ -145,27 +151,85 @@ class IngestionService {
   }
 
   /**
-   * Process content: store without chunking (simplified for Gemini)
+   * Process content: chunk, embed, and store
    */
   async processContent(itemId, text) {
     try {
-      // Store entire text as single chunk (no chunking for simplicity)
-      const chunkId = `${itemId}_chunk_0`;
+      // Enforce content length limit
+      let content = text;
+      if (text.length > this.maxContentLength) {
+        content = text.substring(0, this.maxContentLength);
+        console.log(`[IngestionService] Content truncated from ${text.length} to ${this.maxContentLength} characters`);
+      }
       
-      console.log(`[IngestionService] Storing text as single chunk`);
-      this.sqliteStore.insertChunk(chunkId, itemId, text, 0, null);
+      // Chunk the text
+      const chunks = this.chunkText(content);
       
-      console.log(`[IngestionService] Completed processing for item ${itemId}`);
+      // Enforce max chunks limit
+      if (chunks.length > this.maxChunksPerItem) {
+        console.log(`[IngestionService] Limiting chunks from ${chunks.length} to ${this.maxChunksPerItem}`);
+        chunks.splice(this.maxChunksPerItem);
+      }
       
-      // Force garbage collection
+      console.log(`[IngestionService] Created ${chunks.length} chunks`);
+      
+      // Store chunks without embeddings (defer to query time)
+      for (let i = 0; i < chunks.length; i++) {
+        const chunkId = `${itemId}_chunk_${i}`;
+        
+        try {
+          // Store chunk without embedding (null embeddingId)
+          this.sqliteStore.insertChunk(chunkId, itemId, chunks[i], i, null);
+        } catch (error) {
+          console.warn(`[IngestionService] Error storing chunk ${i}:`, error.message);
+        }
+      }
+      console.log(`[IngestionService] Completed processing ${chunks.length} chunks (embeddings deferred to query time)`);
+      
+      console.log(`[IngestionService] Completed processing ${chunks.length} chunks`);
+      
       if (global.gc) {
         global.gc();
-        console.log(`[IngestionService] Garbage collection triggered`);
       }
     } catch (error) {
       console.error(`[IngestionService] Error in processContent:`, error.message);
       throw error;
     }
+  }
+
+  /**
+   * Simple fixed-size chunking with overlap
+   */
+  chunkText(text) {
+    const charsPerChunk = this.chunkSize * 4; // ~4 chars per token
+    const overlapChars = this.chunkOverlap * 4;
+    
+    const chunks = [];
+    let start = 0;
+    
+    while (start < text.length) {
+      const end = Math.min(start + charsPerChunk, text.length);
+      let chunk = text.slice(start, end);
+      
+      if (end < text.length) {
+        const lastPeriod = chunk.lastIndexOf('.');
+        const lastNewline = chunk.lastIndexOf('\n');
+        const breakPoint = Math.max(lastPeriod, lastNewline);
+        
+        if (breakPoint > charsPerChunk * 0.5) {
+          chunk = chunk.slice(0, breakPoint + 1);
+        }
+      }
+      
+      chunks.push(chunk.trim());
+      start += chunk.length - overlapChars;
+      
+      if (start <= chunks[chunks.length - 1].length) {
+        start = chunks[chunks.length - 1].length + overlapChars;
+      }
+    }
+    
+    return chunks.filter(c => c.length > 0);
   }
 
 }

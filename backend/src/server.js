@@ -54,9 +54,9 @@ if (!existsSync(dataDir)) {
 console.log('[Server] Initializing services...');
 const sqliteStore = new SQLiteStore();
 const vectorStore = new VectorStore(EMBEDDING_DIMENSIONS);
-const embeddingService = null; // Not used with Gemini + keyword search
-const ingestionService = new IngestionService(sqliteStore, vectorStore, null);
-const queryService = new QueryService(sqliteStore, vectorStore, null, API_KEY, LLM_MODEL, API_BASE_URL);
+const embeddingService = new EmbeddingService(API_KEY, EMBEDDING_MODEL, API_BASE_URL);
+const ingestionService = new IngestionService(sqliteStore, vectorStore, embeddingService);
+const queryService = new QueryService(sqliteStore, vectorStore, embeddingService, API_KEY, LLM_MODEL, API_BASE_URL);
 
 // Create Express app
 const app = express();
