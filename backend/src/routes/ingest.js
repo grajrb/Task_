@@ -22,8 +22,8 @@ export const createIngestRoute = (ingestionService) => {
           throw new ValidationError('Content is required and must be a non-empty string');
         }
         
-        if (content.length > 200) {
-          throw new ValidationError('Content too large (max 200 characters)');
+        if (content.length > 500) {
+          throw new ValidationError('Content too large (max 500 characters)');
         }
         
         const itemId = await ingestionService.ingestText(content, metadata || {});

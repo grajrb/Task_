@@ -15,7 +15,7 @@ export const createItemsRoute = (sqliteStore) => {
       const formattedItems = items.map(item => ({
         id: item.id,
         type: item.type,
-        preview: item.content.substring(0, 200) + (item.content.length > 200 ? '...' : ''),
+        preview: item.content.substring(0, 500) + (item.content.length > 500 ? '...' : ''),
         metadata: item.metadata,
         createdAt: new Date(item.createdAt).toISOString()
       }));

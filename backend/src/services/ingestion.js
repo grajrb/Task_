@@ -7,11 +7,11 @@ class IngestionService {
     this.vectorStore = vectorStore;
     this.embeddingService = embeddingService;
     
-    // Chunking configuration - ultra-aggressive limits for memory safety
+    // Chunking configuration - aggressive limits for memory safety
     this.chunkSize = 50; // tokens (~200 chars)
     this.chunkOverlap = 0; // NO overlap to reduce memory
     this.maxChunksPerItem = 1; // SINGLE chunk only
-    this.maxContentLength = 200; // 200 chars per item (reduced from 300)
+    this.maxContentLength = 500; // 500 chars per item
   }
 
   /**
@@ -118,7 +118,7 @@ class IngestionService {
       }
       
       // Limit text size ultra-aggressively for short notes
-      const maxTextSize = 200; // 200 chars max
+      const maxTextSize = 500; // 500 chars max
       if (text.length > maxTextSize) {
         console.log(`[IngestionService] Content truncated from ${text.length} to ${maxTextSize} characters`);
         text = text.substring(0, maxTextSize);
