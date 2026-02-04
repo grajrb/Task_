@@ -1,18 +1,30 @@
-import { GoogleGenerativeAI } from '@google/generative-ai';
+import OpenAI from 'openai';
 
 class EmbeddingService {
-  constructor(apiKey, model = 'text-embedding-004') {
-    this.client = new GoogleGenerativeAI(apiKey);
+  constructor(apiKey, model = 'text-embedding-3-small', baseURL = null) {
+    const config = { apiKey };
+    if (baseURL) {
+      config.baseURL = baseURL;
+    }
+    this.client = new OpenAI(config);
     this.model = model;
+    this.baseURL = baseURL;
+    
+    console.log(`[EmbeddingService] Initialized with model: ${model}`);
+    if (baseURL) {
+      console.log(`[EmbeddingService] Using base URL: ${baseURL}`);
+    }
   }
 
   async generateEmbedding(text) {
     try {
-      const embeddingModel = this.client.getGenerativeModel({ model: this.model });
-      const result = await embeddingModel.embedContent(text);
+      const response = await this.client.embeddings.create({
+        model: this.model,
+        input: text,
+      });
 
       console.log(`[EmbeddingService] Generated embedding for text (${text.length} chars)`);
-      return result.embedding.values;
+      return response.data[0].embedding;
     } catch (error) {
       console.error('[EmbeddingService] Error generating embedding:', error.message);
       throw new Error(`Failed to generate embedding: ${error.message}`);
@@ -20,22 +32,15 @@ class EmbeddingService {
   }
 
   async generateEmbeddings(texts) {
-    try {
-      const embeddingModel = this.client.getGenerativeModel({ model: this.model });
-      
-      // Generate embeddings sequentially (Gemini doesn't support batch)
-      const embeddings = [];
-      for (const text of texts) {
-        const result = await embeddingModel.embedContent(text);
-        embeddings.push(result.embedding.values);
-      }
-
-      console.log(`[EmbeddingService] Generated ${texts.length} embeddings`);
-      return embeddings;
-    } catch (error) {
-      console.error('[EmbeddingService] Error generating embeddings:', error.message);
-      throw new Error(`Failed to generate embeddings: ${error.message}`);
+    // Generate one at a time to avoid memory issues
+    const embeddings = [];
+    for (const text of texts) {
+      const embedding = await this.generateEmbedding(text);
+      embeddings.push(embedding);
     }
+    
+    console.log(`[EmbeddingService] Generated ${texts.length} embeddings`);
+    return embeddings;
   }
 }
 

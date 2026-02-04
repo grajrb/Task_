@@ -25,17 +25,22 @@ const __dirname = dirname(__filename);
 
 // Configuration
 const PORT = process.env.PORT || 3001;
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
-const EMBEDDING_MODEL = process.env.EMBEDDING_MODEL || 'text-embedding-004';
-const EMBEDDING_DIMENSIONS = parseInt(process.env.EMBEDDING_DIMENSIONS || '768');
-const LLM_MODEL = process.env.LLM_MODEL || 'gemini-1.5-flash';
+const API_KEY = process.env.API_KEY || process.env.OPENAI_API_KEY || process.env.PERPLEXITY_API_KEY;
+const API_BASE_URL = process.env.API_BASE_URL || null; // e.g., https://api.laozhang.ai/v1 or https://openrouter.ai/api/v1
+const EMBEDDING_MODEL = process.env.EMBEDDING_MODEL || 'text-embedding-3-small';
+const EMBEDDING_DIMENSIONS = parseInt(process.env.EMBEDDING_DIMENSIONS || '1536');
+const LLM_MODEL = process.env.LLM_MODEL || 'gpt-4o-mini';
 const TOP_K_RESULTS = parseInt(process.env.TOP_K_RESULTS || '5');
 
 // Validate configuration
-if (!GEMINI_API_KEY) {
-  console.error('ERROR: GEMINI_API_KEY is not set in environment variables');
+if (!API_KEY) {
+  console.error('ERROR: API_KEY is not set in environment variables');
   console.error('Please create a .env file based on .env.example');
-  console.error('Get your API key from: https://aistudio.google.com/app/apikey');
+  console.error('\nSupported providers:');
+  console.error('  - Perplexity: https://www.perplexity.ai/settings/api');
+  console.error('  - OpenRouter: https://openrouter.ai/keys');
+  console.error('  - LaoZhang AI: https://api.laozhang.ai/');
+  console.error('  - OpenAI: https://platform.openai.com/api-keys');
   process.exit(1);
 }
 
@@ -49,9 +54,9 @@ if (!existsSync(dataDir)) {
 console.log('[Server] Initializing services...');
 const sqliteStore = new SQLiteStore();
 const vectorStore = new VectorStore(EMBEDDING_DIMENSIONS);
-const embeddingService = new EmbeddingService(GEMINI_API_KEY, EMBEDDING_MODEL);
-const ingestionService = new IngestionService(sqliteStore, vectorStore, embeddingService);
-const queryService = new QueryService(sqliteStore, vectorStore, embeddingService, GEMINI_API_KEY, LLM_MODEL);
+const embeddingService = null; // Not used with Gemini + keyword search
+const ingestionService = new IngestionService(sqliteStore, vectorStore, null);
+const queryService = new QueryService(sqliteStore, vectorStore, null, API_KEY, LLM_MODEL, API_BASE_URL);
 
 // Create Express app
 const app = express();
@@ -97,7 +102,11 @@ app.use(errorHandler);
 app.listen(PORT, () => {
   console.log(`[Server] AI Knowledge Inbox API running on port ${PORT}`);
   console.log(`[Server] Health check: http://localhost:${PORT}/health`);
-  console.log(`[Server] Using Google Gemini API`);
+  if (API_BASE_URL) {
+    console.log(`[Server] Using custom API endpoint: ${API_BASE_URL}`);
+  } else {
+    console.log(`[Server] Using default OpenAI API`);
+  }
   console.log(`[Server] Embedding model: ${EMBEDDING_MODEL}`);
   console.log(`[Server] LLM model: ${LLM_MODEL}`);
 });

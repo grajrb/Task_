@@ -5,8 +5,8 @@
   "main": "src/server.js",
   "type": "module",
   "scripts": {
-    "start": "node src/server.js",
-    "dev": "node --watch src/server.js"
+    "start": "node --max-old-space-size=1024 --expose-gc src/server.js",
+    "dev": "node --max-old-space-size=1024 --expose-gc --watch src/server.js"
   },
   "keywords": [
     "rag",
@@ -17,11 +17,12 @@
   "author": "",
   "license": "MIT",
   "dependencies": {
-    "express": "^4.18.2",
+    "@google/generative-ai": "^0.24.1",
+    "cheerio": "^1.0.0-rc.12",
     "cors": "^2.8.5",
     "dotenv": "^16.3.1",
-    "@google/generative-ai": "^0.21.0",
-    "cheerio": "^1.0.0-rc.12",
+    "express": "^4.18.2",
+    "openai": "^4.20.1",
     "uuid": "^9.0.1"
   }
 }

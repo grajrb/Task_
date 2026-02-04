@@ -1,27 +1,49 @@
-import { GoogleGenerativeAI } from '@google/generative-ai';
+import OpenAI from 'openai';
 
 class QueryService {
-  constructor(sqliteStore, vectorStore, embeddingService, apiKey, model = 'gemini-1.5-flash') {
+  constructor(sqliteStore, vectorStore, embeddingService, apiKey, model = 'gpt-4o-mini', baseURL = null) {
     this.sqliteStore = sqliteStore;
     this.vectorStore = vectorStore;
     this.embeddingService = embeddingService;
-    this.client = new GoogleGenerativeAI(apiKey);
+    
+    const config = { apiKey };
+    if (baseURL) {
+      config.baseURL = baseURL;
+    }
+    this.client = new OpenAI(config);
     this.model = model;
+    this.baseURL = baseURL;
+    
+    console.log(`[QueryService] Initialized with model: ${model}`);
+    if (baseURL) {
+      console.log(`[QueryService] Using base URL: ${baseURL}`);
+    }
   }
 
   /**
-   * Query the knowledge base using RAG
+   * Query the knowledge base using keyword search (text-based, no embeddings)
    */
   async query(question, topK = 5) {
     console.log(`[QueryService] Processing query: "${question}"`);
     
-    // 1. Generate embedding for the question
-    const questionEmbedding = await this.embeddingService.generateEmbedding(question);
+    // Use text-based keyword search (embeddings disabled for memory management)
+    const keywords = question.toLowerCase().split(/\s+/).filter(w => w.length > 2);
+    console.log(`[QueryService] Searching with keywords: ${keywords.join(', ')}`);
     
-    // 2. Search vector store for similar chunks
-    const vectorResults = this.vectorStore.search(questionEmbedding, topK);
+    // Get all chunks and score by keyword matches
+    const allChunks = this.sqliteStore.getAllChunks();
+    const scoredChunks = allChunks.map(chunk => {
+      const content = chunk.content.toLowerCase();
+      const matches = keywords.reduce((sum, keyword) => {
+        return sum + (content.split(keyword).length - 1);
+      }, 0);
+      return { ...chunk, score: matches };
+    })
+    .filter(c => c.score > 0)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, topK);
     
-    if (vectorResults.length === 0) {
+    if (scoredChunks.length === 0) {
       return {
         answer: "I don't have any relevant information to answer that question. Please add some content first.",
         sources: [],
@@ -29,60 +51,47 @@ class QueryService {
       };
     }
     
-    // 3. Retrieve chunk details from SQLite
-    const chunkIds = vectorResults.map(r => r.chunkId);
-    const chunks = this.sqliteStore.getChunksByIds(chunkIds);
-    
-    // Merge vector results with chunk details
-    const enrichedChunks = chunks.map(chunk => {
-      const vectorResult = vectorResults.find(vr => vr.chunkId === chunk.id);
-      return {
-        ...chunk,
-        similarity: vectorResult?.similarity || 0
-      };
-    });
-    
     // 4. Build context from top chunks
-    const context = enrichedChunks
+    const context = scoredChunks
       .map((chunk, i) => `[${i + 1}] ${chunk.content}`)
       .join('\n\n');
     
-    console.log(`[QueryService] Retrieved ${enrichedChunks.length} relevant chunks`);
+    console.log(`[QueryService] Retrieved ${scoredChunks.length} relevant chunks`);
     
     // 5. Generate answer using LLM
     const answer = await this.generateAnswer(question, context);
     
     // 6. Format sources for response
-    const sources = enrichedChunks.map((chunk, i) => ({
+    const sources = scoredChunks.map((chunk, i) => ({
       index: i + 1,
       content: chunk.content.substring(0, 200) + (chunk.content.length > 200 ? '...' : ''),
       itemId: chunk.itemId,
       itemType: chunk.itemType,
-      similarity: chunk.similarity,
+      score: chunk.score,
       metadata: chunk.itemMetadata
     }));
     
     return {
       answer,
       sources,
-      confidence: enrichedChunks[0]?.similarity || 0
+      confidence: Math.min(1, scoredChunks[0]?.score / 10 || 0)
     };
   }
 
   /**
-   * Generate answer using Gemini with retrieved context
+   * Generate answer using OpenAI LLM with retrieved context
    */
   async generateAnswer(question, context) {
-    const prompt = `You are a helpful assistant that answers questions based on the provided context.
+    const systemPrompt = `You are a helpful assistant that answers questions based on the provided context.
 
 Instructions:
 - Answer the question using ONLY the information from the provided context
 - If the context doesn't contain relevant information, say so clearly
 - Cite sources by referencing the [number] in the context
 - Be concise but complete
-- If you're uncertain, indicate that in your response
+- If you're uncertain, indicate that in your response`;
 
-Context from knowledge base:
+    const userPrompt = `Context from knowledge base:
 ${context}
 
 Question: ${question}
@@ -90,19 +99,18 @@ Question: ${question}
 Please provide a clear answer based on the context above.`;
 
     try {
-      const model = this.client.getGenerativeModel({ 
+      const response = await this.client.chat.completions.create({
         model: this.model,
-        generationConfig: {
-          temperature: 0.7,
-          maxOutputTokens: 1000,
-        }
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userPrompt }
+        ],
+        temperature: 0.7,
+        max_tokens: 500
       });
 
-      const result = await model.generateContent(prompt);
-      const response = result.response;
-
-      console.log('[QueryService] Generated answer from LLM');
-      return response.text();
+      console.log('[QueryService] Generated answer from OpenAI');
+      return response.choices[0].message.content;
       
     } catch (error) {
       console.error('[QueryService] Error generating answer:', error.message);

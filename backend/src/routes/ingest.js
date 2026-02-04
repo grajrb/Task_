@@ -22,8 +22,8 @@ export const createIngestRoute = (ingestionService) => {
           throw new ValidationError('Content is required and must be a non-empty string');
         }
         
-        if (content.length > 100000) {
-          throw new ValidationError('Content too large (max 100,000 characters)');
+        if (content.length > 500) {
+          throw new ValidationError('Content too large (max 500 characters for short notes)');
         }
         
         const itemId = await ingestionService.ingestText(content, metadata || {});
@@ -36,26 +36,7 @@ export const createIngestRoute = (ingestionService) => {
         });
         
       } else if (type === 'url') {
-        if (!url || typeof url !== 'string') {
-          throw new ValidationError('URL is required and must be a string');
-        }
-        
-        // Basic URL validation
-        try {
-          new URL(url);
-        } catch {
-          throw new ValidationError('Invalid URL format');
-        }
-        
-        const itemId = await ingestionService.ingestUrl(url, metadata || {});
-        
-        res.status(201).json({
-          success: true,
-          itemId,
-          type: 'url',
-          url,
-          message: 'URL content ingested successfully'
-        });
+        throw new ValidationError('URL ingestion is not supported. Please use text input only (max 500 characters).');
       }
       
     } catch (error) {

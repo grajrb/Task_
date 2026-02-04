@@ -60,6 +60,22 @@ class SQLiteStore {
     }).filter(Boolean);
   }
 
+  getAllChunks() {
+    return Array.from(this.chunks.values()).map(chunk => {
+      const item = this.items.get(chunk.itemId);
+      if (!item) return null;
+      
+      return {
+        id: chunk.id,
+        itemId: chunk.itemId,
+        content: chunk.content,
+        chunkIndex: chunk.chunkIndex,
+        itemType: item.type,
+        itemMetadata: item.metadata
+      };
+    }).filter(Boolean);
+  }
+
   getItemById(itemId) {
     return this.items.get(itemId) || null;
   }

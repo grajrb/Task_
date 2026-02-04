@@ -3,7 +3,7 @@
  * Pure JavaScript implementation - no native dependencies required
  */
 class VectorStore {
-  constructor(dimensions = 768) {
+  constructor(dimensions = 1536) {
     this.dimensions = dimensions;
     this.vectors = []; // Array of { id, chunkId, embedding }
     
